@@ -8,6 +8,7 @@
 //  5. Bối cảnh: khoảng cách tới tuyến (QL6 hoặc các quốc lộ của vùng), điểm dự báo gần nhất, điểm trượt đã điều tra, điểm nguy cơ của Cục Đường bộ.
 (function () {
   const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const KQ = [];                       // các lần đánh giá trong phiên
   const anhLayer = L.layerGroup().addTo(map);
   let chonBanDo = null;                // hàm chờ người dùng bấm bản đồ
@@ -102,22 +103,30 @@
   const huongTxt = a => HUONG8[Math.round(a / 45) % 8];
 
   /* ---------- Mưa và ổn định tại điểm ---------- */
-  async function muaVaOnDinh(lat, lon, beta, laDa) {
+  async function muaVaOnDinh(lat, lon, beta, laDa, zone) {
     const q = 'latitude=' + lat.toFixed(4) + '&longitude=' + lon.toFixed(4) + '&daily=precipitation_sum&timezone=Asia%2FBangkok';
-    const [rf, re] = await Promise.all([
+    const [rf, re, rg] = await Promise.all([
       fetch('https://api.open-meteo.com/v1/forecast?' + q + '&past_days=' + (PAST_DAYS + PAD_FS) + '&forecast_days=4' + (typeof MO_HINH_MUA === 'string' ? MO_HINH_MUA : '')),
-      fetch('https://ensemble-api.open-meteo.com/v1/ensemble?' + q + '&forecast_days=4&models=' + ENS_MODELS).catch(() => null)]);
+      fetch('https://ensemble-api.open-meteo.com/v1/ensemble?' + q + '&forecast_days=4&models=' + ENS_MODELS).catch(() => null),
+      QD18 ? fetch('https://api.open-meteo.com/v1/forecast?latitude=' + lat.toFixed(4) + '&longitude=' + lon.toFixed(4) + '&hourly=precipitation&past_days=3&forecast_days=4&timezone=Asia%2FBangkok').catch(() => null) : Promise.resolve(null)]);
     if (!rf.ok) throw new Error('Không lấy được mưa dự báo');
+    let gio = null;
+    try {
+      if (rg && rg.ok) {
+        const jg = await rg.json(), l = Array.isArray(jg) ? jg[0] : jg;
+        if (l && l.hourly) { gio = {}; l.hourly.time.forEach((t, i) => { const d = t.slice(0, 10); gio[d] = Math.max(gio[d] || 0, l.hourly.precipitation[i] || 0); }); }
+      }
+    } catch (_) {}
     const d = chuanMua(await rf.json()).daily, prF = d.precipitation_sum.map(v => v || 0), tmF = d.time, off = prF.length - (PAST_DAYS + 4);
     const lop = QD18 ? lopNguyCo(beta) : null;
-    const pr = prF.slice(off), tm = tmF.slice(off), days = evalStation(pr, tm, laDa, lop, null);
+    const pr = prF.slice(off), tm = tmF.slice(off), days = evalStation(pr, tm, laDa, lop, gio);
     let ens = null; try { if (re && re.ok) ens = await re.json(); } catch (_) {}
     const m = ens ? ensMembers(ens) : {times: [], cols: []};
     const pe = ensProb(pr, tm, m.times, m.cols, laDa, lop);
     if (pe) days.forEach((o, k) => { if (pe[k]) { o.ens = pe[k]; const pl = probLevel(pe[k]); if (pl > o.lv) { o.lv = pl; o.byEns = true; } } });
     let od = null, chart = null;
     if (!laDa && window.OD) {
-      const id = 'anh', p = OD.thamSo({id, zone: 'KV1'}, null, {nguon: 'DEM', diem: {[id]: {doc: beta}}});
+      const id = 'anh', p = OD.thamSo({id, zone: zone || 'KV1'}, null, {nguon: 'DEM', diem: {[id]: {doc: beta}}});
       const ser = OD.chuoiFS(prF, p), a0 = off + PAST_DAYS - 14;
       chart = {t: tmF.slice(a0), P: prF.slice(a0), FS: ser.slice(a0).map(x => x.FS), nguong: p.nguong};
       let fe = null;
@@ -171,7 +180,7 @@
 
   async function xuLy(file) {
     const url = URL.createObjectURL(file);
-    const img = new Image(); img.src = url; await img.decode().catch(() => { throw new Error('Không đọc được ảnh ' + file.name + ' (nên dùng JPEG)'); });
+    const img = new Image(); img.src = url; await img.decode().catch(() => { URL.revokeObjectURL(url); throw new Error('Không đọc được ảnh ' + file.name + ' (nên dùng JPEG)'); });
     let ex = null; try { ex = docExif(await file.arrayBuffer()); } catch (_) {}
     let vt = ex && ex.lat != null ? {lat: ex.lat, lon: ex.lon, nguon: 'GPS trong ảnh'} : null;
     if (!vt) {
@@ -185,8 +194,8 @@
     const dh = await diaHinh(vt.lat, vt.lon);
     const goc = parseFloat(($('anh-goc').value || '').replace(',', '.'));
     const beta = isFinite(goc) && goc > 0 && goc < 90 ? goc : dh.docMax;
-    const md = await muaVaOnDinh(vt.lat, vt.lon, beta, laDa);
     const bc = boiCanh(vt.lat, vt.lon);
+    const md = await muaVaOnDinh(vt.lat, vt.lon, beta, laDa, bc.gan ? bc.gan.s.zone : 'KV1');
     const r = {ten: file.name, url, vt, ex: ex || {}, anh, laDa, loai, dh, beta, nguonGoc: isFinite(goc) && goc > 0 && goc < 90 ? 'đo tại hiện trường' : 'DEM (sườn dốc nhất trong 120 m)', md, bc, luc: new Date()};
     KQ.unshift(r); veKQ(r); return r;
   }
@@ -196,12 +205,12 @@
     const d0 = r.md.days[0], lv = muc(r), kd = r.md.days.findIndex(d => d.lv === lv);
     const o = r.md.od, f = d0.fs;
     const hang = (a, b) => '<tr><td>' + a + '</td><td>' + b + '</td></tr>';
-    let h = '<div class="anh-kq" style="border-left-color:' + LV_COL[lv] + '"><div class="anh-dau"><img src="' + r.url + '" alt="Ảnh mái dốc ' + r.ten + '">' +
+    let h = '<div class="anh-kq" style="border-left-color:' + LV_COL[lv] + '"><div class="anh-dau"><img src="' + r.url + '" alt="Ảnh mái dốc ' + esc(r.ten) + '">' +
       '<div><b style="color:' + (lv === 1 ? '#7a5d00' : LV_COL[lv]) + '">' + LV_TXT[lv] + '</b> ' + (lv ? '(' + DAY_TXT[kd].toLowerCase() + ')' : 'trong 4 ngày tới') + '<br>' +
-      '<small>' + r.ten + ' · ' + r.vt.lat.toFixed(5) + ', ' + r.vt.lon.toFixed(5) + ' (' + r.vt.nguon + ')' + (r.ex.thoiDiem ? ' · chụp ' + r.ex.thoiDiem.slice(0, 16).replace(/:/, '-').replace(/:/, '-') : '') + '</small></div></div>';
+      '<small>' + esc(r.ten) + ' · ' + r.vt.lat.toFixed(5) + ', ' + r.vt.lon.toFixed(5) + ' (' + esc(r.vt.nguon) + ')' + (r.ex.thoiDiem ? ' · chụp ' + esc(r.ex.thoiDiem.slice(0, 16).replace(/:/, '-').replace(/:/, '-')) : '') + '</small></div></div>';
     h += '<table class="anh-bang">' +
-      hang('Vị trí', 'cách ' + TEN_TUYEN + ' ' + (r.bc.dTuyen < 1000 ? Math.round(r.bc.dTuyen) + ' m' : fmtVN(r.bc.dTuyen / 1000, 1) + ' km') + '; điểm dự báo gần nhất ' + r.bc.gan.s.id + ' (' + fmtVN(r.bc.gan.d / 1000, 1) + ' km)') +
-      hang('Trong bán kính 1 km', r.bc.trUot + ' điểm trượt đã điều tra' + (r.bc.nguyCo.length ? '; điểm nguy cơ Cục ĐB: ' + r.bc.nguyCo.join(', ') : '')) +
+      hang('Vị trí', 'cách ' + TEN_TUYEN + ' ' + (r.bc.dTuyen < 1000 ? Math.round(r.bc.dTuyen) + ' m' : fmtVN(r.bc.dTuyen / 1000, 1) + ' km') + '; điểm dự báo gần nhất ' + esc(r.bc.gan.s.id) + ' (' + fmtVN(r.bc.gan.d / 1000, 1) + ' km)') +
+      hang('Trong bán kính 1 km', r.bc.trUot + ' điểm trượt đã điều tra' + (r.bc.nguyCo.length ? '; điểm nguy cơ Cục ĐB: ' + r.bc.nguyCo.map(esc).join(', ') : '')) +
       hang('Địa hình (DEM)', 'cao độ ' + Math.round(r.dh.caoDo) + ' m; dốc tại điểm ' + fmtVN(r.dh.docTam, 0) + '°, dốc nhất ' + fmtVN(r.dh.docMax, 0) + '°; mái quay hướng ' + huongTxt(r.dh.huong) + '; chênh cao ' + Math.round(r.dh.chenhCao) + ' m trong 240 m') +
       hang('Mưa hôm nay', muaTxt(d0) + (d0.ens ? '; xác suất đạt mức cao nhất ' + Math.round(d0.ens.p3 * 100) + '%' : ''));
     if (r.laDa) h += hang('Ổn định', 'Mái đá' + (r.loai === 'tu' ? ' (nhận từ ảnh)' : '') + ': mô hình đất theo mưa không áp dụng; ổn định vách đá do hệ khe nứt quyết định – cần đo thế nằm khe nứt tại hiện trường để phân tích động học.');
@@ -219,7 +228,7 @@
     h += '<p class="note">Đánh giá sơ bộ từ ảnh, DEM 90 m và mưa mô hình; không thay cho khảo sát địa chất. Ảnh chỉ xử lý trên máy này, không gửi đi.</p></div>';
     const el = document.createElement('div'); el.innerHTML = h; $('anh-kq').prepend(el.firstChild);
     L.marker([r.vt.lat, r.vt.lon], {icon: L.divIcon({className: '', html: '<div class="anh-mk" style="background:' + LV_COL[lv] + '">📷</div>', iconSize: [26, 26], iconAnchor: [13, 13]})})
-      .bindPopup('<div class="pop"><b>' + r.ten + '</b><br><img src="' + r.url + '" style="width:200px;border-radius:6px;margin:4px 0"><br><b style="color:' + LV_COL[lv] + '">' + LV_TXT[lv] + '</b>' +
+      .bindPopup('<div class="pop"><b>' + esc(r.ten) + '</b><br><img src="' + r.url + '" style="width:200px;border-radius:6px;margin:4px 0"><br><b style="color:' + LV_COL[lv] + '">' + LV_TXT[lv] + '</b>' +
         (r.laDa ? '<br>Mái đá – cần đo khe nứt' : '<br>FS hôm nay ' + fmtVN(f.FS, 2) + ', góc mái ' + fmtVN(r.beta, 0) + '°') + '</div>').addTo(anhLayer).openPopup();
     map.setView([r.vt.lat, r.vt.lon], Math.max(map.getZoom(), 13));
     $('anh-tai').hidden = false;
@@ -235,7 +244,7 @@
         xac_suat_fs_nho_hon_1: r.laDa ? null : r.md.days.map(d => d.fsEns ? d.fsEns.p1 : null),
         thuc_vat_pt: r.anh.tv, dat_pt: r.anh.dat, da_sang_pt: r.anh.sang, cach_tuyen_m: Math.round(r.bc.dTuyen)}}))};
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(g, null, 1)], {type: 'application/geo+json'}));
-    a.download = 'danh_gia_mai_doc_' + new Date().toISOString().slice(0, 10) + '.geojson'; a.click();
+    a.download = 'danh_gia_mai_doc_' + new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10) + '.geojson'; a.click();
   }
 
   $('anh-file').addEventListener('change', async e => {

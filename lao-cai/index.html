@@ -54,7 +54,7 @@ section h2{font-size:14px;margin:0 0 10px;font-weight:600}
 .days button{font:inherit;font-size:13px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);
   background:#fff;color:var(--ink);cursor:pointer}
 .days button[aria-pressed="true"]{background:var(--ink);color:#fff;border-color:var(--ink)}
-button:focus-visible,.cellx:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
+button:focus-visible,.cellx:focus-visible,.alerts li[role="button"]:focus-visible{outline:3px solid var(--ochre);outline-offset:2px}
 .alerts{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
 .alerts li{background:#fff;border:1px solid var(--line);border-left:5px solid var(--muted);border-radius:8px;
   padding:8px 10px;cursor:pointer}
@@ -134,13 +134,13 @@ details.levels td{border-top:1px solid var(--line);padding:5px 4px;vertical-alig
 
   <section>
     <h2>Mức cảnh báo theo tuyến và ngày</h2>
-    <div class="strip" id="strip" role="grid" aria-label="Mức cảnh báo 4 ngày cho các quốc lộ"></div>
+    <div class="strip" id="strip" role="region" aria-label="Mức cảnh báo 4 ngày cho các quốc lộ"></div>
     <p class="note">Số nhỏ và thanh trắng trong ô: xác suất đạt ngưỡng trượt theo 82 kịch bản tổ hợp (cao nhất trong khu vực); khi không có tổ hợp thì là tỷ số mưa/ngưỡng. Chạm vào ô để xem ngày đó.</p>
   </section>
 
   <section id="fs-sec">
     <h2>Ổn định mái dốc theo mưa và lực hút dính (SWCC)</h2>
-    <div class="strip" id="fs-strip" role="grid" aria-label="Hệ số an toàn mái dốc nhỏ nhất 4 ngày cho các quốc lộ"></div>
+    <div class="strip" id="fs-strip" role="region" aria-label="Hệ số an toàn mái dốc nhỏ nhất 4 ngày cho các quốc lộ"></div>
     <p class="note">Số lớn: hệ số an toàn FS nhỏ nhất trong khu vực (FS &lt; 1 mất ổn định, &lt; 1,2 nguy hiểm). Số nhỏ: tỷ lệ kịch bản tổ hợp có FS &lt; 1.
       Bấm vào điểm trên bản đồ để xem diễn biến FS 14 ngày qua và 4 ngày tới.</p>
     <p class="note" id="fs-time"></p>
@@ -293,6 +293,7 @@ let DAY_TXT = ['Hôm nay','Ngày mai','+2 ngày','+3 ngày'];
 let REPLAY = null;                       // 'YYYY-MM-DD' khi đang xem lại
 const EVENTS = [["2024-09-09", "Bão Yagi (số 3): sạt taluy, đất đá tràn mặt đường tại 20 điểm QL70 (Yên Bái)"], ["2024-09-10", "Làng Nủ (Phúc Khánh, Bảo Yên): lũ quét, sạt lở vùi lấp thôn"], ["2025-09-29", "Đèo Khau Phạ QL32: 30–40 điểm sạt từ 29/9, Km269 sụt khoảng 30 m đường"], ["2026-05-04", "QL4D Km120+900 (Tả Phìn): đá đổ taluy, tắc đường lên Sa Pa"], ["2026-07-16", "Mưa lớn Mù Cang Chải, Văn Bàn: sạt QL32, QL279 (Minh Lương, Nậm Xé), hàng trăm điểm ở Chế Tạo"], ["2026-07-27", "QL32 Km328+550 (Khao Mang): sạt khoảng 800 m³, tắc đường"], ["2026-07-28", "San Lùng, Bản Xèo (Bát Xát): sạt khoảng 36.000 m³"], ["2026-08-05", "Thủy điện Mý Háng Tầu (Chế Tạo): sạt lớn, 1 người chết"], ["2026-09-14", "Mưa lớn Văn Chấn, Trạm Tấu: sạt QL32 Km265+900 (Tú Lệ), Phình Hồ, Mỏ Vàng"], ["2026-09-19", "Tân Hợp (Văn Yên): sạt 5.000–10.000 m³, cô lập 37 hộ"], ["2026-09-30", "QL279 Km79+200 (Bảo Hà): sạt taluy khoảng 10.000–25.000 m³, tắc đường"]];   // sự cố đã xác minh (báo chí)
 function addDays(iso,n){const d=new Date(iso+'T00:00:00Z'); d.setUTCDate(d.getUTCDate()+n); return d.toISOString().slice(0,10);}
+function todayVN(){ return new Date(Date.now() + 7*3600e3).toISOString().slice(0,10); }
 const REFRESH_MIN = 30;
 const PERSIST_DAYS = 7;   // duy trì cảnh báo sau ngày mưa vượt ngưỡng (kiểm định 2023–2026)
 const PAST_DAYS = 17;     // 10 ngày tính P10 + 7 ngày duy trì
@@ -336,6 +337,7 @@ ROUTES.forEach(r=>L.polyline(r.map(p=>[p[1],p[0]]),{color:'#5B6A70',weight:3,opa
 const zoneLayer = L.layerGroup().addTo(map);
 const stLayer = L.layerGroup().addTo(map);
 const lsLayer = L.layerGroup();
+DATA.landslides = [...new Map(DATA.landslides.map(p => [p[0].toFixed(5)+','+p[1].toFixed(5), p])).values()];
 DATA.landslides.forEach(p=>L.circleMarker([p[1],p[0]],{radius:3,color:'#A8651F',weight:1,fillOpacity:.8})
   .bindTooltip('Điểm trượt đã điều tra').addTo(lsLayer));
 lsLayer.addTo(map);
@@ -441,7 +443,7 @@ async function loadSat(){
 }
 function satAgeDays(){ if(!VT||!VT.updated) return 99; return (Date.now()-new Date(VT.updated.replace(' ','T')+':00+07:00'))/864e5; }
 function satRainFor(id){                      // {ngày: mm} mưa đo bằng vệ tinh, chỉ khi số liệu <= 3 ngày tuổi
-  if(!VT||VT.trang_thai!=='ok'||!VT.mua||!VT.mua.tram||satAgeDays()>3) return null;
+  if(REPLAY||!VT||VT.trang_thai!=='ok'||!VT.mua||!VT.mua.tram||satAgeDays()>3) return null;
   const row=VT.mua.tram[id]; if(!row) return null; const m={};
   VT.mua.ngay.forEach((d,i)=>{ if(row[i]!=null) m[d]=row[i]; }); return m;
 }
@@ -477,14 +479,14 @@ function renderSat(){
         '<br>Cần kiểm tra hiện trường: có thể là sạt lở, nhưng cũng có thể do thi công, nổ mìn hoặc chặt cây.</div>').addTo(satLayer);
   });
   if(list.length){
-    h+='<ul class="alerts" id="sat-list">'+list.slice(0,8).map((x,i)=>'<li data-i="'+i+'" style="border-left-color:'+(x.cls==='s1'?'#6B3FA0':'#0E7C7B')+'"><b>'+x.z.tinh+' ~'+kmTxt(x.v.km)+' – '+x.name+'</b><span>'+
+    h+='<ul class="alerts" id="sat-list">'+list.slice(0,8).map((x,i)=>'<li tabindex="0" role="button" data-i="'+i+'" style="border-left-color:'+(x.cls==='s1'?'#6B3FA0':'#0E7C7B')+'"><b>'+x.z.tinh+' ~'+kmTxt(x.v.km)+' – '+x.name+'</b><span>'+
       fmtD(x.date)+' · '+fmtVN(x.v.ha,1)+' ha · cách đường '+x.v.cach_duong_m+' m'+(x.wide?' · nghi do đất ẩm':'')+'</span></li>').join('')+'</ul>';
   }
   h+='<p class="note">Vùng thay đổi trên ảnh vệ tinh là tín hiệu để đi kiểm tra, chưa phải kết luận đã sạt. Radar khó nhìn vách đá rất dốc.</p>';
   if(VT.loi&&VT.loi.length) h+='<p class="note">Lỗi lần chạy gần nhất: '+VT.loi.join('; ')+'</p>';
   box.innerHTML=h;
   const ul=document.getElementById('sat-list');
-  if(ul) ul.querySelectorAll('li').forEach(li=>li.onclick=()=>{const x=list[+li.dataset.i];map.setView([x.v.xy[1],x.v.xy[0]],15);});
+  if(ul) ul.querySelectorAll('li').forEach(li=>{const go=()=>{const x=list[+li.dataset.i];map.setView([x.v.xy[1],x.v.xy[0]],15);};li.onclick=go;li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};});
 }
 /* ---------- Bản đồ vùng nguy cơ trượt lở (job AI hằng tuần trên Earth Engine) ---------- */
 let NCBD = null;
@@ -535,14 +537,14 @@ function renderInsar(){
   if(!map.hasLayer(insarLayer)) insarLayer.addTo(map);
   h+='<div class="thang-insar"></div><p class="note" style="margin-top:0">−40 ← ra xa vệ tinh · 0 · về phía vệ tinh → +40 mm/năm (ảnh màu lớp “Dịch chuyển InSAR”).</p>';
   if(hs.length){
-    h+='<ul class="alerts" id="insar-list">'+hs.slice(0,8).map((x,i)=>'<li data-i="'+i+'" style="border-left-color:#C8322B"><b>Gần '+x.diem_gan+': '+insarTxt(x.v_tb)+'</b><span>'+
+    h+='<ul class="alerts" id="insar-list">'+hs.slice(0,8).map((x,i)=>'<li tabindex="0" role="button" data-i="'+i+'" style="border-left-color:#C8322B"><b>Gần '+x.diem_gan+': '+insarTxt(x.v_tb)+'</b><span>'+
       fmtVN(x.dien_tich_ha,1)+' ha · cách tuyến '+x.cach_tuyen_m+' m</span></li>').join('')+'</ul>';
   } else h+='<p class="note">Chưa thấy vùng dịch chuyển từ '+fmtVN(I.nguong.dich_chuyen,0)+' mm/năm trong hành lang 1 km quanh tuyến.</p>';
   h+='<p class="note">InSAR đo dịch chuyển chậm trước khi sạt (trượt bò, nứt, lún); không thấy được sạt nhanh, vách đá rất dốc và vùng rừng rậm (mất kết hợp). '+
     'Điểm dự báo có dịch chuyển từ '+fmtVN(I.nguong.dich_chuyen,0)+' mm/năm được tính vào vùng nguy cơ cao hơn một bậc.</p>';
   box.innerHTML=h;
   const ul=document.getElementById('insar-list');
-  if(ul) ul.querySelectorAll('li').forEach(li=>li.onclick=()=>{const x=hs[+li.dataset.i];map.setView([x.xy[1],x.xy[0]],15);});
+  if(ul) ul.querySelectorAll('li').forEach(li=>{const go=()=>{const x=hs[+li.dataset.i];map.setView([x.xy[1],x.xy[0]],15);};li.onclick=go;li.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go();}};});
 }
 function insarRows(s){
   const t=INSAR&&INSAR.trang_thai==='ok'&&(INSAR.tram||{})[s.id]; if(!t) return '';
@@ -657,13 +659,15 @@ function renderStrip(){
   DATA.zones.forEach(z=>{
     h+='<div class="zn">'+z.tinh+'<span>'+zNhan(z)+'</span></div>';
     for(let k=0;k<4;k++){
-      const rows=RESULT.filter(s=>s.zone===z.id).map(s=>s.days[k]);
+      const sts=RESULT.filter(s=>s.zone===z.id), rows=sts.map(s=>s.days[k]); if(!rows.length) continue;
       const lv=Math.max(...rows.map(d=>d.lv)), rt=Math.max(...rows.map(d=>d.ratio));
-      const onlyPersist=rows.filter(d=>d.lv===lv).every(d=>d.byPersist);
+      const top=sts.filter(s=>s.days[k].lv===lv), topD=top.map(s=>s.days[k]), onlyPersist=topD.every(d=>d.byPersist);
       const pe=rows.filter(d=>d.ens); const p3=pe.length?Math.max(...pe.map(d=>d.ens.p3)):null;
-      h+='<div role="gridcell" tabindex="0" class="cellx lv'+lv+(k===DAY?' sel':'')+'" data-day="'+k+'" data-zone="'+z.id+'" style="background:'+LV_COL[lv]+'" '+
-         'aria-label="'+z.tinh+' '+DAY_TXT[k]+': '+LV_TXT[lv]+(onlyPersist?' sau mưa':'')+(p3!=null?', xác suất đạt ngưỡng '+Math.round(p3*100)+'%':'')+'">'+LV_SHORT[lv]+'<small>'+(onlyPersist?'sau mưa':p3!=null?Math.round(p3*100)+'%':QD18?Math.round(rt*100)+' mm':rt.toFixed(2))+'</small>'+
-         (p3!=null&&!onlyPersist?'<span class="pb" aria-hidden="true"><i style="width:'+Math.max(2,Math.round(p3*100))+'%"></i></span>':'')+'</div>';
+      const onlyFs=!onlyPersist&&lv>=2&&!p3&&topD.every(d=>d.byFs||d.bySau), onlyRock=!onlyPersist&&lv===1&&!p3&&top.every(s=>s.type==='da'&&s.days[k].ratio<0.7);
+      const sub=onlyPersist?'sau mưa':onlyFs?'theo FS':onlyRock?'đá đổ':p3!=null?Math.round(p3*100)+'%':QD18?Math.round(rt*100)+' mm':rt.toFixed(2);
+      h+='<div role="button" tabindex="0" class="cellx lv'+lv+(k===DAY?' sel':'')+'" data-day="'+k+'" data-zone="'+z.id+'" style="background:'+LV_COL[lv]+'" '+
+         'aria-label="'+z.tinh+' '+DAY_TXT[k]+': '+LV_TXT[lv]+(onlyPersist?' sau mưa':onlyFs?' theo hệ số an toàn':onlyRock?' do điểm đá đổ':'')+(p3!=null&&!onlyFs&&!onlyRock?', xác suất đạt ngưỡng '+Math.round(p3*100)+'%':'')+'">'+LV_SHORT[lv]+'<small>'+sub+'</small>'+
+         (p3!=null&&!onlyPersist&&!onlyFs&&!onlyRock?'<span class="pb" aria-hidden="true"><i style="width:'+Math.max(2,Math.round(p3*100))+'%"></i></span>':'')+'</div>';
     }
   });
   el.innerHTML=h;
@@ -682,7 +686,8 @@ function renderDays(){
 function renderMap(){
   zoneLayer.clearLayers(); stLayer.clearLayers();
   DATA.zones.forEach(z=>{
-    const lv=Math.max(...RESULT.filter(s=>s.zone===z.id).map(s=>s.days[DAY].lv));
+    const zs=RESULT.filter(s=>s.zone===z.id); if(!zs.length) return;
+    const lv=Math.max(...zs.map(s=>s.days[DAY].lv));
     const lines=zoneLines(z).map(l=>l.map(p=>[p[1],p[0]]));
     L.polyline(lines,{color:'#fff',weight:11,opacity:.9}).addTo(zoneLayer);
     L.polyline(lines,{color:LV_COL[lv],weight:6}).addTo(zoneLayer)
@@ -754,13 +759,13 @@ function renderAlerts(){                         // cảnh báo theo vùng (như
   if(!groups.length){ul.innerHTML='<li style="border-left-color:'+LV_COL[0]+'"><b>Không có điểm cần cảnh báo</b><span>'+(QD18?'Mưa dự báo dưới mức rủi ro cấp 1 (QĐ 18/2021), xác suất tổ hợp thấp và hệ số an toàn mái dốc ≥ 1,2.':'Mưa dự báo dưới 70% ngưỡng gây trượt, xác suất tổ hợp thấp, hệ số an toàn mái dốc ≥ 1,2 và 7 ngày qua không có ngày vượt ngưỡng.')+'</span></li>';return;}
   ul.innerHTML=groups.map((g,i)=>{
     const top=g.pts[0], same=g.pts.filter(x=>x.lv===g.lv).length;
-    return '<li data-i="'+i+'" style="border-left-color:'+LV_COL[g.lv]+'"><b>'+g.z.tinh+' '+zNhan(g.z)+' – '+LV_TXT[g.lv]+'</b>'+
+    return '<li tabindex="0" role="button" data-i="'+i+'" style="border-left-color:'+LV_COL[g.lv]+'"><b>'+g.z.tinh+' '+zNhan(g.z)+' – '+LV_TXT[g.lv]+'</b>'+
       '<span>'+same+' điểm ở mức này; cao nhất '+top.s.id+': '+reasonTxt(top)+'</span>'+
       (g.pts.length>1?'<details onclick="event.stopPropagation()"><summary style="font-size:12px;color:var(--muted);cursor:pointer">Xem '+g.pts.length+' điểm</summary>'+
         g.pts.map(x=>'<div style="font-size:12px;margin-top:3px"><b style="font-size:12px;display:inline;color:'+(x.lv===1?'#7a5d00':LV_COL[x.lv])+'">'+LV_SHORT[x.lv]+'</b> '+x.s.id+' – '+reasonTxt(x)+'</div>').join('')+'</details>':'')+'</li>';
   }).join('');
-  ul.querySelectorAll('li').forEach(li=>li.onclick=()=>{const g=groups[+li.dataset.i];
-    map.fitBounds(L.latLngBounds(zoneLines(g.z).flat().map(p=>[p[1],p[0]])).pad(0.3));});
+  ul.querySelectorAll('li').forEach(li=>{const go=()=>{const g=groups[+li.dataset.i]; map.fitBounds(L.latLngBounds(zoneLines(g.z).flat().map(p=>[p[1],p[0]])).pad(0.3));}; li.onclick=go; li.onkeydown=e=>{if(e.target===li&&(e.key==='Enter'||e.key===' ')){e.preventDefault();go();}};});
+
 }
 function renderStatus(){
   const worst=Math.max(...RESULT.flatMap(s=>s.days.map(d=>d.lv)));
@@ -779,7 +784,7 @@ const HUONG_DAN = [   // cảnh báo dựa trên tác động (WMO-No. 1150) –
   ['Xem xét hạn chế hoặc tạm dừng lưu thông đoạn nguy cơ cao; cảnh giới 2 đầu đoạn; sẵn sàng phân luồng, cứu hộ; báo cáo Cục Đường bộ và Ban Chỉ huy PCTT&TKCN tỉnh.','Tránh đi qua khu vực nếu không cần thiết; tuân thủ phân luồng; thấy đất đá lăn, mặt đường nứt thì dừng cách xa và gọi 112.']];
 function renderGuide(){
   if(!RESULT) return; document.getElementById('g-day').textContent=DAY_TXT[DAY].toLowerCase();
-  const byZone=DATA.zones.map(z=>({z,lv:Math.max(...RESULT.filter(s=>s.zone===z.id).map(s=>s.days[DAY].lv))}));
+  const byZone=DATA.zones.map(z=>{const zs=RESULT.filter(s=>s.zone===z.id); return {z,lv:zs.length?Math.max(...zs.map(s=>s.days[DAY].lv)):0};});
   const lv=Math.max(...byZone.map(x=>x.lv)); const where=byZone.filter(x=>x.lv===lv).map(x=>x.z.tinh).join(', ');
   document.getElementById('guide').innerHTML='<div class="lvl"><i style="background:'+LV_COL[lv]+'"></i>'+LV_TXT[lv]+(lv?' – '+where:'')+'</div>'+
     '<div class="who"><b>Đơn vị quản lý đường</b>'+HUONG_DAN[lv][0]+'</div><div class="who"><b>Người tham gia giao thông</b>'+HUONG_DAN[lv][1]+'</div>';
@@ -810,7 +815,7 @@ function renderFS(){
       if(!rows.length){ h+='<div class="cellx" style="background:#5B6A70"><small>chưa có</small></div>'; continue; }
       const fs=Math.min(...rows.map(d=>d.fs.FS)), lv=Math.max(...rows.map(d=>d.fsLv));
       const pe=rows.filter(d=>d.fsEns), p1=pe.length?Math.max(...pe.map(d=>d.fsEns.p1)):null;
-      h+='<div role="gridcell" tabindex="0" class="cellx lv'+lv+(k===DAY?' sel':'')+'" data-day="'+k+'" data-zone="'+z.id+'" style="background:'+LV_COL[lv]+'" '+
+      h+='<div role="button" tabindex="0" class="cellx lv'+lv+(k===DAY?' sel':'')+'" data-day="'+k+'" data-zone="'+z.id+'" style="background:'+LV_COL[lv]+'" '+
         'aria-label="'+z.tinh+' '+DAY_TXT[k]+': hệ số an toàn nhỏ nhất '+fmtVN(fs,2)+(p1!=null?', '+Math.round(p1*100)+'% kịch bản FS nhỏ hơn 1':'')+'">FS '+fmtVN(fs,2)+
         '<small>'+(p1!=null?Math.round(p1*100)+'% FS&lt;1':'&nbsp;')+'</small></div>';
     }
@@ -840,7 +845,7 @@ function renderFSMethod(){
   document.getElementById('fs-method').innerHTML=
     '<p>Mô hình mái vô hạn, bước 1 ngày, tính cho từng điểm dự báo trên tuyến (không áp dụng cho vách đá – cơ chế đá đổ). Mã tính: <a href="../on_dinh.js">on_dinh.js</a>.</p><ol style="padding-left:18px;margin:4px 0">'+
     '<li>Nước thấm tích lũy (Lumb): W<sub>t</sub> = '+fmtVN(p.k,2)+'·W<sub>t−1</sub> + min('+fmtVN(p.frac,1)+'·P<sub>t</sub>; '+p.cap+' mm), dùng mưa 45 ngày gần nhất (kể cả mưa vệ tinh).</li>'+
-    '<li>Đới ngấm h = W / [n(1 − S<sub>0</sub>)]; khi h vượt chiều dày tầng phủ D, phần dư thành mực nước treo h<sub>w</sub> = min(D, h − D) trên đá gốc.</li>'+
+    '<li>Đới ngấm h = W / [1000·n(1 − S<sub>0</sub>)]; khi h vượt chiều dày tầng phủ D, phần dư thành mực nước treo h<sub>w</sub> = min(D, h − D) trên đá gốc.</li>'+
     '<li>Lực hút dính ở phần đất chưa ngấm theo đường cong đặc trưng đất–nước (SWCC) van Genuchten: S<sub>e</sub> = (S<sub>0</sub>n − θ<sub>r</sub>)/(n − θ<sub>r</sub>), ψ = [S<sub>e</sub><sup>−1/m</sup> − 1]<sup>1/n<sub>vG</sub></sup>/α, m = 1 − 1/n<sub>vG</sub>; với S<sub>0</sub> = '+fmtVN(p.S0,2)+' → ψ ≈ '+fmtVN(sw[0],0)+' kPa. Trong đới ngấm ψ = 0.</li>'+
     '<li>Cường độ không bão hòa Vanapalli: τ = c′ + (σ<sub>n</sub> − u<sub>w</sub>)tanφ′ + ψ·S<sub>e</sub>·tanφ′. Mái vô hạn: FS = [c′ + (W<sub>z</sub>cos²β − γ<sub>w</sub>h<sub>w</sub>cos²β)tanφ′ + ψS<sub>e</sub>tanφ′] / (W<sub>z</sub>sinβcosβ), W<sub>z</sub> = γ<sub>sat</sub>·min(h,z) + γ·(z − min(h,z)); lấy FS nhỏ nhất của mặt trượt ở đáy đới ngấm (z = h) và ở đáy tầng phủ (z = D).</li>'+
     '<li>Tầng phủ mỏng dần theo độ dốc (nội suy theo tanβ): '+fmtVN(p.D_max,1)+' m (≤ '+p.beta_min+'°) → '+fmtVN(p.D_min,1)+' m (≥ '+p.beta_max+'°). Độ dốc β: '+(nd?nd+' điểm lấy từ DEM Copernicus 30 m (phân vị 90% trong bán kính 300 m)':'mặc định '+p.beta+'° (chưa có số liệu DEM)')+'.</li>'+
@@ -867,7 +872,7 @@ function notify(w){
   if(w.worst<2||!('Notification' in window)||Notification.permission!=='granted') return;
   const key=w.worst+'|'+w.wd.s.id+'|'+w.wd.d.date;
   if(key===lastNotified) return; lastNotified=key;
-  new Notification('Cảnh báo sạt lở '+TEN_TUYEN+': '+LV_TXT[w.worst],{body:w.wd.s.id+' – '+w.wd.d.date+': '+(w.wd.d.byPersist?persistTxt(w.wd.d):'mưa '+w.wd.d.P.toFixed(0)+' mm, ngưỡng '+w.wd.d.thr.toFixed(0)+' mm')});
+  new Notification('Cảnh báo sạt lở '+TEN_TUYEN+': '+LV_TXT[w.worst],{body:w.wd.s.id+' – '+w.wd.d.date+': '+reasonTxt(Object.assign({s:w.wd.s},w.wd.d))});
 }
 async function run(){
   const btn=document.getElementById('btn-refresh'); btn.disabled=true; btn.textContent='Đang cập nhật…';
@@ -877,9 +882,9 @@ async function run(){
   try{
     RESULT=await fetchForecast(); setDay(DAY);
     if(REPLAY){ renderStatus(); showEvents(); }
-    else{ notify(renderStatus()); try{ localStorage.setItem('ql6_du_bao',JSON.stringify({t:Date.now(),r:RESULT})); }catch(_){} }
+    else{ notify(renderStatus()); try{ localStorage.setItem('laocai_du_bao',JSON.stringify({t:Date.now(),r:RESULT})); }catch(_){} }
   }catch(e){
-    let saved=null; try{ saved=JSON.parse(localStorage.getItem('ql6_du_bao')||'null'); }catch(_){}
+    let saved=null; try{ saved=JSON.parse(localStorage.getItem('laocai_du_bao')||'null'); }catch(_){}
     if(saved&&saved.r&&!REPLAY){
       RESULT=saved.r; setDay(DAY); renderStatus();
       const t=new Date(saved.t);
@@ -902,7 +907,7 @@ document.getElementById('btn-notify').onclick=async()=>{
 document.getElementById('auto-note').textContent='Trang tự cập nhật mỗi '+REFRESH_MIN+' phút khi đang mở. Cảnh báo qua Telegram/Zalo chạy tự động trên GitHub Actions kể cả khi không ai mở trang; số liệu vệ tinh cập nhật 2 lần mỗi ngày.';
 function showEvents(){
   const box=document.getElementById('ev-box'); if(!REPLAY){box.innerHTML='';return;}
-  const a=addDays(REPLAY,-7), b=addDays(REPLAY,3);
+  const a=addDays(REPLAY,-8), b=addDays(REPLAY,3);
   const ev=EVENTS.filter(e=>e[0]>=a&&e[0]<=b);
   box.innerHTML=ev.length?'Sự cố đã ghi nhận quanh ngày này:'+ev.map(e=>'<div class="ev"><b>'+e[0].split('-').reverse().join('/')+'</b> – '+e[1]+'</div>').join('')
     :'Không có sự cố '+TEN_TUYEN+' nào đã xác minh trong khoảng 7 ngày trước đến 3 ngày sau ngày này.';
@@ -916,7 +921,7 @@ function setMode(iso){
   DAY=0; showEvents(); run();
 }
 (function(){
-  const inp=document.getElementById('replay-date'); const max=addDays(new Date().toISOString().slice(0,10),-4); inp.max=max;
+  const inp=document.getElementById('replay-date'); const max=addDays(todayVN(),-4); inp.max=max;
   document.getElementById('btn-replay').onclick=()=>{
     const v=inp.value; if(!v){alert('Chọn một ngày trước.');return;}
     if(v>max||v<'2022-02-15'){alert('Chọn ngày từ 15/02/2022 đến '+max.split('-').reverse().join('/')+' (cần đủ 3 ngày sau ngày xem).');return;}

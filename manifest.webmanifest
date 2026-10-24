@@ -1,7 +1,7 @@
 {
   "name": "Dự báo sạt lở Quốc lộ 6",
   "short_name": "Sạt lở QL6",
-  "description": "Dự báo mưa 3 ngày và cảnh báo nguy cơ sạt lở tại 3 khu vực trọng điểm Quốc lộ 6 (Phú Thọ, Sơn La, Điện Biên).",
+  "description": "Dự báo mưa 4 ngày và cảnh báo nguy cơ sạt lở tại 3 khu vực trọng điểm Quốc lộ 6 (Phú Thọ, Sơn La, Điện Biên).",
   "lang": "vi",
   "start_url": "./?nguon=app",
   "scope": "./",

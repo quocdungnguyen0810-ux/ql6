@@ -1,0 +1,5 @@
+# Giữ thư mục sao lưu nguyên bản chỉ nằm trên máy cục bộ, không đẩy lên GitHub
+_backup_origin/
+__pycache__/
+*.pyc
+.vercel/
